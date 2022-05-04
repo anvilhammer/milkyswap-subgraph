@@ -1,9 +1,9 @@
 /* eslint-disable prefer-const */
-import { log, BigInt, BigDecimal, Address, EthereumEvent } from '@graphprotocol/graph-ts'
+import { log, BigInt, BigDecimal, Address, ethereum } from '@graphprotocol/graph-ts'
 import { ERC20 } from '../types/Factory/ERC20'
 import { ERC20SymbolBytes } from '../types/Factory/ERC20SymbolBytes'
 import { ERC20NameBytes } from '../types/Factory/ERC20NameBytes'
-import { User, Bundle, Token, LiquidityPosition, LiquidityPositionSnapshot, Pair } from '../types/schema'
+import { ExchangeUser, Bundle, Token, LiquidityPosition, LiquidityPositionSnapshot, Pair } from '../types/schema'
 import { Factory as FactoryContract } from '../types/templates/Pair/Factory'
 import { TokenDefinition } from './tokenDefinition'
 
@@ -33,8 +33,8 @@ export function bigDecimalExp18(): BigDecimal {
   return BigDecimal.fromString('1000000000000000000')
 }
 
-export function convertEthToDecimal(eth: BigInt): BigDecimal {
-  return eth.toBigDecimal().div(exponentToBigDecimal(18))
+export function convertWadaToDecimal(wada: BigInt): BigDecimal {
+  return wada.toBigDecimal().div(exponentToBigDecimal(new BigInt(18)))
 }
 
 export function convertTokenToDecimal(tokenAmount: BigInt, exchangeDecimals: BigInt): BigDecimal {
@@ -53,7 +53,7 @@ export function equalToZero(value: BigDecimal): boolean {
   return false
 }
 
-export function isNullEthValue(value: string): boolean {
+export function isNullWadaValue(value: string): boolean {
   return value == '0x0000000000000000000000000000000000000000000000000000000000000001'
 }
 
@@ -74,7 +74,7 @@ export function fetchTokenSymbol(tokenAddress: Address): string {
     let symbolResultBytes = contractSymbolBytes.try_symbol()
     if (!symbolResultBytes.reverted) {
       // for broken pairs that have no symbol function exposed
-      if (!isNullEthValue(symbolResultBytes.value.toHexString())) {
+      if (!isNullWadaValue(symbolResultBytes.value.toHexString())) {
         symbolValue = symbolResultBytes.value.toString()
       }
     }
@@ -102,7 +102,7 @@ export function fetchTokenName(tokenAddress: Address): string {
     let nameResultBytes = contractNameBytes.try_name()
     if (!nameResultBytes.reverted) {
       // for broken exchanges that have no name function exposed
-      if (!isNullEthValue(nameResultBytes.value.toHexString())) {
+      if (!isNullWadaValue(nameResultBytes.value.toHexString())) {
         nameValue = nameResultBytes.value.toString()
       }
     }
@@ -161,15 +161,15 @@ export function createLiquidityPosition(exchange: Address, user: Address): Liqui
 }
 
 export function createUser(address: Address): void {
-  let user = User.load(address.toHexString())
+  let user = ExchangeUser.load(address.toHexString())
   if (user === null) {
-    user = new User(address.toHexString())
+    user = new ExchangeUser(address.toHexString())
     user.usdSwapped = ZERO_BD
     user.save()
   }
 }
 
-export function createLiquiditySnapshot(position: LiquidityPosition, event: EthereumEvent): void {
+export function createLiquiditySnapshot(position: LiquidityPosition, event: ethereum.Event): void {
   let timestamp = event.block.timestamp.toI32()
   let bundle = Bundle.load('1')
   let pair = Pair.load(position.pair)
@@ -183,8 +183,8 @@ export function createLiquiditySnapshot(position: LiquidityPosition, event: Ethe
   snapshot.block = event.block.number.toI32()
   snapshot.user = position.user
   snapshot.pair = position.pair
-  snapshot.token0PriceUSD = token0.derivedETH.times(bundle.ethPrice)
-  snapshot.token1PriceUSD = token1.derivedETH.times(bundle.ethPrice)
+  snapshot.token0PriceUSD = token0.derivedWADA.times(bundle.wadaPrice)
+  snapshot.token1PriceUSD = token1.derivedWADA.times(bundle.wadaPrice)
   snapshot.reserve0 = pair.reserve0
   snapshot.reserve1 = pair.reserve1
   snapshot.reserveUSD = pair.reserveUSD

@@ -4,7 +4,7 @@ import {
     DevCall,
     EmergencyWithdraw,
     MassUpdatePoolsCall,
-    MasterMilker as MasterChefContract,
+    MasterMilker as MasterMilkerContract,
     OwnershipTransferred,
     SetCall,
     UpdatePoolCall,
@@ -20,53 +20,53 @@ import {
     BIG_INT_ZERO,
     MASTER_MILKER_ADDRESS,
     MASTER_MILKER_START_BLOCK,
-  } from '../../constants'
-  import { History, MasterChef, Pool, PoolHistory, FarmUser } from '../types/schema'
-  import { getSushiPrice, getUSDRate } from 'pricing'
+  } from '../constants'
+  import { History, MasterMilker, Pool, PoolHistory, FarmUser } from '../types/schema'
+  import { getMilkyPrice, getUSDRate } from './pricing'
   
   import { ERC20 as ERC20Contract } from '../types/MasterMilker/ERC20'
   import { Pair as PairContract } from '../types/MasterMilker/Pair'
   
-  function getMasterChef(block: ethereum.Block): MasterChef {
-    let masterChef = MasterChef.load(MASTER_MILKER_ADDRESS.toHex())
+  function getMasterMilker(block: ethereum.Block): MasterMilker {
+    let masterMilker = MasterMilker.load(MASTER_MILKER_ADDRESS.toHex())
   
-    if (masterChef === null) {
-      const contract = MasterChefContract.bind(MASTER_MILKER_ADDRESS)
-      masterChef = new MasterChef(MASTER_MILKER_ADDRESS.toHex())
-      masterChef.bonusMultiplier = contract.BONUS_MULTIPLIER()
-      masterChef.bonusEndBlock = contract.bonusEndBlock()
-      masterChef.devaddr = contract.devaddr()
-      masterChef.owner = contract.owner()
+    if (masterMilker === null) {
+      const contract = MasterMilkerContract.bind(MASTER_MILKER_ADDRESS)
+      masterMilker = new MasterMilker(MASTER_MILKER_ADDRESS.toHex())
+      masterMilker.bonusMultiplier = contract.BONUS_MULTIPLIER()
+      masterMilker.bonusEndBlock = contract.bonusEndBlock()
+      masterMilker.devaddr = contract.devaddr()
+      masterMilker.owner = contract.owner()
       // poolInfo ...
-      masterChef.startBlock = contract.startBlock()
-      masterChef.milky = contract.milky()
-      masterChef.milkyPerBlock = contract.milkyPerBlock()
-      masterChef.totalAllocPoint = contract.totalAllocPoint()
+      masterMilker.startBlock = contract.startBlock()
+      masterMilker.milky = contract.milky()
+      masterMilker.milkyPerBlock = contract.milkyPerBlock()
+      masterMilker.totalAllocPoint = contract.totalAllocPoint()
       // userInfo ...
-      masterChef.poolCount = BIG_INT_ZERO
+      masterMilker.poolCount = BIG_INT_ZERO
   
-      masterChef.slpBalance = BIG_DECIMAL_ZERO
-      masterChef.slpAge = BIG_DECIMAL_ZERO
-      masterChef.slpAgeRemoved = BIG_DECIMAL_ZERO
-      masterChef.slpDeposited = BIG_DECIMAL_ZERO
-      masterChef.slpWithdrawn = BIG_DECIMAL_ZERO
+      masterMilker.slpBalance = BIG_DECIMAL_ZERO
+      masterMilker.slpAge = BIG_DECIMAL_ZERO
+      masterMilker.slpAgeRemoved = BIG_DECIMAL_ZERO
+      masterMilker.slpDeposited = BIG_DECIMAL_ZERO
+      masterMilker.slpWithdrawn = BIG_DECIMAL_ZERO
   
-      masterChef.updatedAt = block.timestamp
+      masterMilker.updatedAt = block.timestamp
   
-      masterChef.save()
+      masterMilker.save()
     }
   
-    return masterChef as MasterChef
+    return masterMilker as MasterMilker
   }
   
   export function getPool(id: BigInt, block: ethereum.Block): Pool {
     let pool = Pool.load(id.toString())
   
     if (pool === null) {
-      const masterChef = getMasterChef(block)
+      const masterMilker = getMasterMilker(block)
   
-      const masterChefContract = MasterChefContract.bind(MASTER_MILKER_ADDRESS)
-      const poolLength = masterChefContract.poolLength()
+      const masterMilkerContract = MasterMilkerContract.bind(MASTER_MILKER_ADDRESS)
+      const poolLength = masterMilkerContract.poolLength()
   
       if (id >= poolLength) {
         return null
@@ -76,9 +76,9 @@ import {
       pool = new Pool(id.toString())
   
       // Set relation
-      pool.owner = masterChef.id
+      pool.owner = masterMilker.id
   
-      const poolInfo = masterChefContract.poolInfo(masterChef.poolCount)
+      const poolInfo = masterMilkerContract.poolInfo(masterMilker.poolCount)
   
       pool.pair = poolInfo.value0
       pool.allocPoint = poolInfo.value1
@@ -182,66 +182,66 @@ import {
   }
   
   export function add(event: AddCall): void {
-    const masterChef = getMasterChef(event.block)
+    const masterMilker = getMasterMilker(event.block)
   
-    log.info('Add pool #{}', [masterChef.poolCount.toString()])
+    log.info('Add pool #{}', [masterMilker.poolCount.toString()])
   
-    const pool = getPool(masterChef.poolCount, event.block)
+    const pool = getPool(masterMilker.poolCount, event.block)
   
     if (pool === null) {
-      log.error('Pool added with id greater than poolLength, pool #{}', [masterChef.poolCount.toString()])
+      log.error('Pool added with id greater than poolLength, pool #{}', [masterMilker.poolCount.toString()])
       return
     }
   
-    // Update MasterChef.
-    masterChef.totalAllocPoint = masterChef.totalAllocPoint.plus(pool.allocPoint)
-    masterChef.poolCount = masterChef.poolCount.plus(BIG_INT_ONE)
-    masterChef.save()
+    // Update MasterMilker.
+    masterMilker.totalAllocPoint = masterMilker.totalAllocPoint.plus(pool.allocPoint)
+    masterMilker.poolCount = masterMilker.poolCount.plus(BIG_INT_ONE)
+    masterMilker.save()
   }
   
   // Calls
   export function set(call: SetCall): void {
-    log.info('Set pool id: {} allocPoint: {} withUpdate: {}', [
-      call.inputs._pid.toString(),
-      call.inputs._allocPoint.toString(),
-    ])
+    // log.info('Set pool id: {} allocPoint: {}', [
+    //   call.inputs._pid.toString(),
+    //   call.inputs._allocPoint.toString(),
+    // ])
   
     const pool = getPool(call.inputs._pid, call.block)
   
-    const masterChef = getMasterChef(call.block)
+    const masterMilker = getMasterMilker(call.block)
   
-    // Update masterchef
-    masterChef.totalAllocPoint = masterChef.totalAllocPoint.plus(call.inputs._allocPoint.minus(pool.allocPoint))
-    masterChef.save()
+    // Update mastermilker
+    masterMilker.totalAllocPoint = masterMilker.totalAllocPoint.plus(call.inputs._allocPoint.minus(pool.allocPoint))
+    masterMilker.save()
   
-    // Update pool
-    pool.allocPoint = call.inputs._allocPoint
-    pool.save()
+    // // Update pool
+    // pool.allocPoint = call.inputs._allocPoint
+    // pool.save()
   }
   
-  export function massUpdatePools(call: MassUpdatePoolsCall): void {
-    log.info('Mass update pools', [])
-  }
+  // export function massUpdatePools(call: MassUpdatePoolsCall): void {
+  //   log.info('Mass update pools', [])
+  // }
   
   export function updatePool(call: UpdatePoolCall): void {
-    log.info('Update pool id {}', [call.inputs._pid.toString()])
+    // log.info('Update pool id {}', [call.inputs._pid.toString()])
   
-    const masterChef = MasterChefContract.bind(MASTER_MILKER_ADDRESS)
-    const poolInfo = masterChef.poolInfo(call.inputs._pid)
+    const masterMilker = MasterMilkerContract.bind(MASTER_MILKER_ADDRESS)
+    const poolInfo = masterMilker.poolInfo(call.inputs._pid)
     const pool = getPool(call.inputs._pid, call.block)
     pool.lastRewardBlock = poolInfo.value2
-    pool.accSushiPerShare = poolInfo.value3
+    pool.accMilkyPerShare = poolInfo.value3
     pool.save()
   }
   
   export function dev(call: DevCall): void {
     log.info('Dev changed to {}', [call.inputs._devaddr.toHex()])
   
-    const masterChef = getMasterChef(call.block)
+    const masterMilker = getMasterMilker(call.block)
   
-    masterChef.devaddr = call.inputs._devaddr
+    masterMilker.devaddr = call.inputs._devaddr
   
-    masterChef.save()
+    masterMilker.save()
   }
   
   // Events
@@ -261,9 +261,9 @@ import {
       event.params.pid.toString(),
     ])*/
   
-    const masterChefContract = MasterChefContract.bind(MASTER_MILKER_ADDRESS)
+    const masterMilkerContract = MasterMilkerContract.bind(MASTER_MILKER_ADDRESS)
   
-    const poolInfo = masterChefContract.poolInfo(event.params.pid)
+    const poolInfo = masterMilkerContract.poolInfo(event.params.pid)
   
     const pool = getPool(event.params.pid, event.block)
   
@@ -273,7 +273,7 @@ import {
     pool.balance = pairContract.balanceOf(MASTER_MILKER_ADDRESS)
   
     pool.lastRewardBlock = poolInfo.value2
-    pool.accSushiPerShare = poolInfo.value3
+    pool.accMilkyPerShare = poolInfo.value3
   
     const poolDays = event.block.timestamp.minus(pool.updatedAt).divDecimal(BigDecimal.fromString('86400'))
     pool.slpAge = pool.slpAge.plus(poolDays.times(pool.slpBalance))
@@ -283,7 +283,7 @@ import {
   
     pool.updatedAt = event.block.timestamp
   
-    const userInfo = masterChefContract.userInfo(event.params.pid, event.params.user)
+    const userInfo = masterMilkerContract.userInfo(event.params.pid, event.params.user)
   
     const user = getUser(event.params.pid, event.params.user, event.block)
   
@@ -293,18 +293,18 @@ import {
       pool.userCount = pool.userCount.plus(BIG_INT_ONE)
     }
   
-    // Calculate SUSHI being paid out
+    // Calculate MILKY being paid out
     if (event.block.number.gt(MASTER_MILKER_START_BLOCK) && user.amount.gt(BIG_INT_ZERO)) {
       const pending = user.amount
         .toBigDecimal()
-        .times(pool.accSushiPerShare.toBigDecimal())
+        .times(pool.accMilkyPerShare.toBigDecimal())
         .div(BIG_DECIMAL_1E12)
         .minus(user.rewardDebt.toBigDecimal())
         .div(BIG_DECIMAL_1E18)
       // log.info('Deposit: User amount is more than zero, we should harvest {} milky', [pending.toString()])
       if (pending.gt(BIG_DECIMAL_ZERO)) {
-        // log.info('Harvesting {} SUSHI', [pending.toString()])
-        const milkyHarvestedUSD = pending.times(getSushiPrice(event.block))
+        // log.info('Harvesting {} MILKY', [pending.toString()])
+        const milkyHarvestedUSD = pending.times(getMilkyPrice(event.block))
         user.milkyHarvested = user.milkyHarvested.plus(pending)
         user.milkyHarvestedUSD = user.milkyHarvestedUSD.plus(milkyHarvestedUSD)
         pool.milkyHarvested = pool.milkyHarvested.plus(pending)
@@ -328,9 +328,9 @@ import {
   
         const token1Amount = reservesResult.value.value1.toBigDecimal().times(share)
   
-        const token0PriceUSD = getUSDRate(pairContract.token0(), event.block)
+        const token0PriceUSD = getUSDRate(pairContract.token0())
   
-        const token1PriceUSD = getUSDRate(pairContract.token1(), event.block)
+        const token1PriceUSD = getUSDRate(pairContract.token1())
   
         const token0USD = token0Amount.times(token0PriceUSD)
   
@@ -378,20 +378,20 @@ import {
     user.save()
     pool.save()
   
-    const masterChef = getMasterChef(event.block)
+    const masterMilker = getMasterMilker(event.block)
   
-    const masterChefDays = event.block.timestamp.minus(masterChef.updatedAt).divDecimal(BigDecimal.fromString('86400'))
-    masterChef.slpAge = masterChef.slpAge.plus(masterChefDays.times(masterChef.slpBalance))
+    const masterMilkerDays = event.block.timestamp.minus(masterMilker.updatedAt).divDecimal(BigDecimal.fromString('86400'))
+    masterMilker.slpAge = masterMilker.slpAge.plus(masterMilkerDays.times(masterMilker.slpBalance))
   
-    masterChef.slpDeposited = masterChef.slpDeposited.plus(amount)
-    masterChef.slpBalance = masterChef.slpBalance.plus(amount)
+    masterMilker.slpDeposited = masterMilker.slpDeposited.plus(amount)
+    masterMilker.slpBalance = masterMilker.slpBalance.plus(amount)
   
-    masterChef.updatedAt = event.block.timestamp
-    masterChef.save()
+    masterMilker.updatedAt = event.block.timestamp
+    masterMilker.save()
   
     const history = getHistory(MASTER_MILKER_ADDRESS.toHex(), event.block)
-    history.slpAge = masterChef.slpAge
-    history.slpBalance = masterChef.slpBalance
+    history.slpAge = masterMilker.slpAge
+    history.slpBalance = masterMilker.slpBalance
     history.slpDeposited = history.slpDeposited.plus(amount)
     history.save()
   
@@ -422,9 +422,9 @@ import {
       return
     }
   
-    const masterChefContract = MasterChefContract.bind(MASTER_MILKER_ADDRESS)
+    const masterMilkerContract = MasterMilkerContract.bind(MASTER_MILKER_ADDRESS)
   
-    const poolInfo = masterChefContract.poolInfo(event.params.pid)
+    const poolInfo = masterMilkerContract.poolInfo(event.params.pid)
   
     const pool = getPool(event.params.pid, event.block)
   
@@ -433,7 +433,7 @@ import {
     const pairContract = PairContract.bind(poolInfo.value0)
     pool.balance = pairContract.balanceOf(MASTER_MILKER_ADDRESS)
     pool.lastRewardBlock = poolInfo.value2
-    pool.accSushiPerShare = poolInfo.value3
+    pool.accMilkyPerShare = poolInfo.value3
   
     const poolDays = event.block.timestamp.minus(pool.updatedAt).divDecimal(BigDecimal.fromString('86400'))
     const poolAge = pool.slpAge.plus(poolDays.times(pool.slpBalance))
@@ -449,7 +449,7 @@ import {
     if (event.block.number.gt(MASTER_MILKER_START_BLOCK) && user.amount.gt(BIG_INT_ZERO)) {
       const pending = user.amount
         .toBigDecimal()
-        .times(pool.accSushiPerShare.toBigDecimal())
+        .times(pool.accMilkyPerShare.toBigDecimal())
         .div(BIG_DECIMAL_1E12)
         .minus(user.rewardDebt.toBigDecimal())
         .div(BIG_DECIMAL_1E18)
@@ -457,13 +457,13 @@ import {
       //   pending.toString(),
       //   event.block.number.toString(),
       // ])
-      // log.info('SUSHI PRICE {}', [getSushiPrice(event.block).toString()])
+      // log.info('MILKY PRICE {}', [getMilkyPrice(event.block).toString()])
       if (pending.gt(BIG_DECIMAL_ZERO)) {
-        // log.info('Harvesting {} SUSHI (CURRENT SUSHI PRICE {})', [
+        // log.info('Harvesting {} MILKY (CURRENT MILKY PRICE {})', [
         //   pending.toString(),
-        //   getSushiPrice(event.block).toString(),
+        //   getMilkyPrice(event.block).toString(),
         // ])
-        const milkyHarvestedUSD = pending.times(getSushiPrice(event.block))
+        const milkyHarvestedUSD = pending.times(getMilkyPrice(event.block))
         user.milkyHarvested = user.milkyHarvested.plus(pending)
         user.milkyHarvestedUSD = user.milkyHarvestedUSD.plus(milkyHarvestedUSD)
         pool.milkyHarvested = pool.milkyHarvested.plus(pending)
@@ -473,7 +473,7 @@ import {
       }
     }
   
-    const userInfo = masterChefContract.userInfo(event.params.pid, event.params.user)
+    const userInfo = masterMilkerContract.userInfo(event.params.pid, event.params.user)
   
     user.amount = userInfo.value0
     user.rewardDebt = userInfo.value1
@@ -490,9 +490,9 @@ import {
   
         const token1Amount = reservesResult.value.value1.toBigDecimal().times(share)
   
-        const token0PriceUSD = getUSDRate(pairContract.token0(), event.block)
+        const token0PriceUSD = getUSDRate(pairContract.token0())
   
-        const token1PriceUSD = getUSDRate(pairContract.token1(), event.block)
+        const token1PriceUSD = getUSDRate(pairContract.token1())
   
         const token0USD = token0Amount.times(token0PriceUSD)
   
@@ -531,23 +531,23 @@ import {
     user.save()
     pool.save()
   
-    const masterChef = getMasterChef(event.block)
+    const masterMilker = getMasterMilker(event.block)
   
-    const days = event.block.timestamp.minus(masterChef.updatedAt).divDecimal(BigDecimal.fromString('86400'))
-    const slpAge = masterChef.slpAge.plus(days.times(masterChef.slpBalance))
-    const slpAgeRemoved = slpAge.div(masterChef.slpBalance).times(amount)
-    masterChef.slpAge = slpAge.minus(slpAgeRemoved)
-    masterChef.slpAgeRemoved = masterChef.slpAgeRemoved.plus(slpAgeRemoved)
+    const days = event.block.timestamp.minus(masterMilker.updatedAt).divDecimal(BigDecimal.fromString('86400'))
+    const slpAge = masterMilker.slpAge.plus(days.times(masterMilker.slpBalance))
+    const slpAgeRemoved = slpAge.div(masterMilker.slpBalance).times(amount)
+    masterMilker.slpAge = slpAge.minus(slpAgeRemoved)
+    masterMilker.slpAgeRemoved = masterMilker.slpAgeRemoved.plus(slpAgeRemoved)
   
-    masterChef.slpWithdrawn = masterChef.slpWithdrawn.plus(amount)
-    masterChef.slpBalance = masterChef.slpBalance.minus(amount)
-    masterChef.updatedAt = event.block.timestamp
-    masterChef.save()
+    masterMilker.slpWithdrawn = masterMilker.slpWithdrawn.plus(amount)
+    masterMilker.slpBalance = masterMilker.slpBalance.minus(amount)
+    masterMilker.updatedAt = event.block.timestamp
+    masterMilker.save()
   
     const history = getHistory(MASTER_MILKER_ADDRESS.toHex(), event.block)
-    history.slpAge = masterChef.slpAge
+    history.slpAge = masterMilker.slpAge
     history.slpAgeRemoved = history.slpAgeRemoved.plus(slpAgeRemoved)
-    history.slpBalance = masterChef.slpBalance
+    history.slpBalance = masterMilker.slpBalance
     history.slpWithdrawn = history.slpWithdrawn.plus(amount)
     history.save()
   

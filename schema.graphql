@@ -7,14 +7,14 @@ type UniswapFactory @entity {
 
   # total volume
   totalVolumeUSD: BigDecimal!
-  totalVolumeETH: BigDecimal!
+  totalVolumeWADA: BigDecimal!
 
   # untracked values - less confident USD scores
   untrackedVolumeUSD: BigDecimal!
 
   # total liquidity
   totalLiquidityUSD: BigDecimal!
-  totalLiquidityETH: BigDecimal!
+  totalLiquidityWADA: BigDecimal!
 
   # transactions
   txCount: BigInt!
@@ -44,7 +44,7 @@ type Token @entity {
   totalLiquidity: BigDecimal!
 
   # derived prices
-  derivedETH: BigDecimal
+  derivedWADA: BigDecimal
 
   # derived fields
   tokenDayData: [TokenDayData!]! @derivedFrom(field: "token")
@@ -66,10 +66,10 @@ type Pair @entity {
   totalSupply: BigDecimal!
 
   # derived liquidity
-  reserveETH: BigDecimal!
+  reserveWADA: BigDecimal!
   reserveUSD: BigDecimal!
   # used for separating per pair reserves and global
-  trackedReserveETH: BigDecimal!
+  trackedReserveWADA: BigDecimal!
 
   # Price in terms of the asset pair
   token0Price: BigDecimal!
@@ -181,7 +181,7 @@ type Burn @entity {
   # derived amount based on available prices of tokens
   amountUSD: BigDecimal
 
-  # mark uncomplete in ETH case
+  # mark uncomplete in WADA case
   needsComplete: Boolean!
 
   # optional fee fields, if a Transfer event is fired in _mintFee
@@ -213,7 +213,7 @@ type Swap @entity {
 # stores for USD calculations
 type Bundle @entity {
   id: ID!
-  ethPrice: BigDecimal! # price of ETH usd
+  wadaPrice: BigDecimal! # price of WADA usd
 }
 
 # Data accumulated and condensed into day stats for all of Uniswap
@@ -221,12 +221,12 @@ type UniswapDayData @entity {
   id: ID! # timestamp rounded to current day by dividing by 86400
   date: Int!
 
-  dailyVolumeETH: BigDecimal!
+  dailyVolumeWADA: BigDecimal!
   dailyVolumeUSD: BigDecimal!
   dailyVolumeUntracked: BigDecimal!
 
-  totalVolumeETH: BigDecimal!
-  totalLiquidityETH: BigDecimal!
+  totalVolumeWADA: BigDecimal!
+  totalLiquidityWADA: BigDecimal!
   totalVolumeUSD: BigDecimal! # Accumulate at each trade, not just calculated off whatever totalVolume is. making it more accurate as it is a live conversion
   totalLiquidityUSD: BigDecimal!
 
@@ -287,13 +287,13 @@ type TokenDayData @entity {
 
   # volume stats
   dailyVolumeToken: BigDecimal!
-  dailyVolumeETH: BigDecimal!
+  dailyVolumeWADA: BigDecimal!
   dailyVolumeUSD: BigDecimal!
   dailyTxns: BigInt!
 
   # liquidity stats
   totalLiquidityToken: BigDecimal!
-  totalLiquidityETH: BigDecimal!
+  totalLiquidityWADA: BigDecimal!
   totalLiquidityUSD: BigDecimal!
 
   # price stats
@@ -302,8 +302,8 @@ type TokenDayData @entity {
 
 # MasterMilker entities
 
-# MasterChef
-type MasterChef @entity {
+# MasterMilker
+type MasterMilker @entity {
   # Contract address
   id: ID!
 
@@ -315,9 +315,6 @@ type MasterChef @entity {
 
   # Dev fund address
   devaddr: Bytes!
-
-  # Migrator
-  migrator: Bytes!
 
   # Owner
   owner: Bytes!
@@ -363,11 +360,11 @@ type MasterChef @entity {
 }
 
 type History @entity {
-  # Master chef id concatenated with timestamp
+  # Master milker id concatenated with timestamp
   id: ID!
 
-  # Owner (MasterChef, Pool, or User).
-  owner: MasterChef!
+  # Owner (MasterMilker, Pool, or User).
+  owner: MasterMilker!
 
   # SLP Balance
   slpBalance: BigDecimal!
@@ -393,11 +390,11 @@ type History @entity {
 
 # Pool
 type Pool @entity {
-  # Index of pool in poolInfo on MasterChef contract
+  # Index of pool in poolInfo on MasterMilker contract
   id: ID!
 
   # Owner
-  owner: MasterChef!
+  owner: MasterMilker!
 
   # Pair Liquidity Token Address
   pair: Bytes!

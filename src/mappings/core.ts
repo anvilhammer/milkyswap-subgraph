@@ -1,5 +1,5 @@
 /* eslint-disable prefer-const */
-import { BigInt, BigDecimal, store, Address } from '@graphprotocol/graph-ts'
+import { BigInt, BigDecimal, store, Address, log } from '@graphprotocol/graph-ts'
 import {
   Pair,
   Token,
@@ -12,7 +12,7 @@ import {
 } from '../types/schema'
 import { Pair as PairContract, Mint, Burn, Swap, Transfer, Sync } from '../types/templates/Pair/Pair'
 import { updatePairDayData, updateTokenDayData, updateUniswapDayData, updatePairHourData } from './dayUpdates'
-import { getEthPriceInUSD, findEthPerToken, getTrackedVolumeUSD, getTrackedLiquidityUSD } from './pricing'
+import { getWadaRate, getWadaPrice, getTrackedVolumeUSD, getTrackedLiquidityUSD } from './pricing'
 import {
   convertTokenToDecimal,
   ADDRESS_ZERO,
@@ -37,6 +37,8 @@ export function handleTransfer(event: Transfer): void {
 
   let factory = UniswapFactory.load(FACTORY_ADDRESS)
   let transactionHash = event.transaction.hash.toHexString()
+
+  log.info('Tx hash {}', [transactionHash])
 
   // user stats
   let from = event.params.from
@@ -94,7 +96,7 @@ export function handleTransfer(event: Transfer): void {
     }
   }
 
-  // case where direct send first on ETH withdrawls
+  // case where direct send first on WADA withdrawls
   if (event.params.to.toHexString() == pair.id) {
     let burns = transaction.burns
     let burn = new BurnEvent(
@@ -217,7 +219,7 @@ export function handleSync(event: Sync): void {
   let uniswap = UniswapFactory.load(FACTORY_ADDRESS)
 
   // reset factory liquidity by subtracting onluy tarcked liquidity
-  uniswap.totalLiquidityETH = uniswap.totalLiquidityETH.minus(pair.trackedReserveETH as BigDecimal)
+  uniswap.totalLiquidityWADA = uniswap.totalLiquidityWADA.minus(pair.trackedReserveWADA as BigDecimal)
 
   // reset token total liquidity amounts
   token0.totalLiquidity = token0.totalLiquidity.minus(pair.reserve0)
@@ -233,36 +235,37 @@ export function handleSync(event: Sync): void {
 
   pair.save()
 
-  // update ETH price now that reserves could have changed
+  // update WADA price now that reserves could have changed
   let bundle = Bundle.load('1')
-  bundle.ethPrice = getEthPriceInUSD()
+  bundle.wadaPrice = getWadaPrice() as BigDecimal
+  log.info('WADA price: {}', [bundle.wadaPrice.toString()])
   bundle.save()
 
-  token0.derivedETH = findEthPerToken(token0 as Token)
-  token1.derivedETH = findEthPerToken(token1 as Token)
+  token0.derivedWADA = getWadaRate(Address.fromString(token0.id))
+  token1.derivedWADA = getWadaRate(Address.fromString(token1.id))
   token0.save()
   token1.save()
 
   // get tracked liquidity - will be 0 if neither is in whitelist
-  let trackedLiquidityETH: BigDecimal
-  if (bundle.ethPrice.notEqual(ZERO_BD)) {
-    trackedLiquidityETH = getTrackedLiquidityUSD(pair.reserve0, token0 as Token, pair.reserve1, token1 as Token).div(
-      bundle.ethPrice
+  let trackedLiquidityWADA: BigDecimal
+  if (bundle.wadaPrice.notEqual(ZERO_BD)) {
+    trackedLiquidityWADA = getTrackedLiquidityUSD(pair.reserve0, token0 as Token, pair.reserve1, token1 as Token).div(
+      bundle.wadaPrice
     )
   } else {
-    trackedLiquidityETH = ZERO_BD
+    trackedLiquidityWADA = ZERO_BD
   }
 
   // use derived amounts within pair
-  pair.trackedReserveETH = trackedLiquidityETH
-  pair.reserveETH = pair.reserve0
-    .times(token0.derivedETH as BigDecimal)
-    .plus(pair.reserve1.times(token1.derivedETH as BigDecimal))
-  pair.reserveUSD = pair.reserveETH.times(bundle.ethPrice)
+  pair.trackedReserveWADA = trackedLiquidityWADA
+  pair.reserveWADA = pair.reserve0
+    .times(token0.derivedWADA as BigDecimal)
+    .plus(pair.reserve1.times(token1.derivedWADA as BigDecimal))
+  pair.reserveUSD = pair.reserveWADA.times(bundle.wadaPrice)
 
   // use tracked amounts globally
-  uniswap.totalLiquidityETH = uniswap.totalLiquidityETH.plus(trackedLiquidityETH)
-  uniswap.totalLiquidityUSD = uniswap.totalLiquidityETH.times(bundle.ethPrice)
+  uniswap.totalLiquidityWADA = uniswap.totalLiquidityWADA.plus(trackedLiquidityWADA)
+  uniswap.totalLiquidityUSD = uniswap.totalLiquidityWADA.times(bundle.wadaPrice)
 
   // now correctly set liquidity amounts for each token
   token0.totalLiquidity = token0.totalLiquidity.plus(pair.reserve0)
@@ -294,12 +297,12 @@ export function handleMint(event: Mint): void {
   token0.txCount = token0.txCount.plus(ONE_BI)
   token1.txCount = token1.txCount.plus(ONE_BI)
 
-  // get new amounts of USD and ETH for tracking
+  // get new amounts of USD and WADA for tracking
   let bundle = Bundle.load('1')
-  let amountTotalUSD = token1.derivedETH
+  let amountTotalUSD = token1.derivedWADA
     .times(token1Amount)
-    .plus(token0.derivedETH.times(token0Amount))
-    .times(bundle.ethPrice)
+    .plus(token0.derivedWADA.times(token0Amount))
+    .times(bundle.wadaPrice)
 
   // update txn counts
   pair.txCount = pair.txCount.plus(ONE_BI)
@@ -354,12 +357,12 @@ export function handleBurn(event: Burn): void {
   token0.txCount = token0.txCount.plus(ONE_BI)
   token1.txCount = token1.txCount.plus(ONE_BI)
 
-  // get new amounts of USD and ETH for tracking
+  // get new amounts of USD and WADA for tracking
   let bundle = Bundle.load('1')
-  let amountTotalUSD = token1.derivedETH
+  let amountTotalUSD = token1.derivedWADA
     .times(token1Amount)
-    .plus(token0.derivedETH.times(token0Amount))
-    .times(bundle.ethPrice)
+    .plus(token0.derivedWADA.times(token0Amount))
+    .times(bundle.wadaPrice)
 
   // update txn counts
   uniswap.txCount = uniswap.txCount.plus(ONE_BI)
@@ -405,24 +408,24 @@ export function handleSwap(event: Swap): void {
   let amount0Total = amount0Out.plus(amount0In)
   let amount1Total = amount1Out.plus(amount1In)
 
-  // ETH/USD prices
+  // WADA/USD prices
   let bundle = Bundle.load('1')
 
-  // get total amounts of derived USD and ETH for tracking
-  let derivedAmountETH = token1.derivedETH
+  // get total amounts of derived USD and WADA for tracking
+  let derivedAmountWADA = token1.derivedWADA
     .times(amount1Total)
-    .plus(token0.derivedETH.times(amount0Total))
+    .plus(token0.derivedWADA.times(amount0Total))
     .div(BigDecimal.fromString('2'))
-  let derivedAmountUSD = derivedAmountETH.times(bundle.ethPrice)
+  let derivedAmountUSD = derivedAmountWADA.times(bundle.wadaPrice)
 
   // only accounts for volume through white listed tokens
   let trackedAmountUSD = getTrackedVolumeUSD(amount0Total, token0 as Token, amount1Total, token1 as Token, pair as Pair)
 
-  let trackedAmountETH: BigDecimal
-  if (bundle.ethPrice.equals(ZERO_BD)) {
-    trackedAmountETH = ZERO_BD
+  let trackedAmountWADA: BigDecimal
+  if (bundle.wadaPrice.equals(ZERO_BD)) {
+    trackedAmountWADA = ZERO_BD
   } else {
-    trackedAmountETH = trackedAmountUSD.div(bundle.ethPrice)
+    trackedAmountWADA = trackedAmountUSD.div(bundle.wadaPrice)
   }
 
   // update token0 global volume and token liquidity stats
@@ -450,7 +453,7 @@ export function handleSwap(event: Swap): void {
   // update global values, only used tracked amounts for volume
   let uniswap = UniswapFactory.load(FACTORY_ADDRESS)
   uniswap.totalVolumeUSD = uniswap.totalVolumeUSD.plus(trackedAmountUSD)
-  uniswap.totalVolumeETH = uniswap.totalVolumeETH.plus(trackedAmountETH)
+  uniswap.totalVolumeWADA = uniswap.totalVolumeWADA.plus(trackedAmountWADA)
   uniswap.untrackedVolumeUSD = uniswap.untrackedVolumeUSD.plus(derivedAmountUSD)
   uniswap.txCount = uniswap.txCount.plus(ONE_BI)
 
@@ -511,7 +514,7 @@ export function handleSwap(event: Swap): void {
 
   // swap specific updating
   uniswapDayData.dailyVolumeUSD = uniswapDayData.dailyVolumeUSD.plus(trackedAmountUSD)
-  uniswapDayData.dailyVolumeETH = uniswapDayData.dailyVolumeETH.plus(trackedAmountETH)
+  uniswapDayData.dailyVolumeWADA = uniswapDayData.dailyVolumeWADA.plus(trackedAmountWADA)
   uniswapDayData.dailyVolumeUntracked = uniswapDayData.dailyVolumeUntracked.plus(derivedAmountUSD)
   uniswapDayData.save()
 
@@ -529,17 +532,17 @@ export function handleSwap(event: Swap): void {
 
   // swap specific updating for token0
   token0DayData.dailyVolumeToken = token0DayData.dailyVolumeToken.plus(amount0Total)
-  token0DayData.dailyVolumeETH = token0DayData.dailyVolumeETH.plus(amount0Total.times(token0.derivedETH as BigDecimal))
+  token0DayData.dailyVolumeWADA = token0DayData.dailyVolumeWADA.plus(amount0Total.times(token0.derivedWADA as BigDecimal))
   token0DayData.dailyVolumeUSD = token0DayData.dailyVolumeUSD.plus(
-    amount0Total.times(token0.derivedETH as BigDecimal).times(bundle.ethPrice)
+    amount0Total.times(token0.derivedWADA as BigDecimal).times(bundle.wadaPrice)
   )
   token0DayData.save()
 
   // swap specific updating
   token1DayData.dailyVolumeToken = token1DayData.dailyVolumeToken.plus(amount1Total)
-  token1DayData.dailyVolumeETH = token1DayData.dailyVolumeETH.plus(amount1Total.times(token1.derivedETH as BigDecimal))
+  token1DayData.dailyVolumeWADA = token1DayData.dailyVolumeWADA.plus(amount1Total.times(token1.derivedWADA as BigDecimal))
   token1DayData.dailyVolumeUSD = token1DayData.dailyVolumeUSD.plus(
-    amount1Total.times(token1.derivedETH as BigDecimal).times(bundle.ethPrice)
+    amount1Total.times(token1.derivedWADA as BigDecimal).times(bundle.wadaPrice)
   )
   token1DayData.save()
 }

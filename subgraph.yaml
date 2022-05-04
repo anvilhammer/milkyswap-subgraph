@@ -1,4 +1,4 @@
-specVersion: 0.0.2
+specVersion: 0.0.5
 description: MilkySwap is bringing essential DeFi infrastructure to Milkomeda
 repository: https://github.com/milkyswap/milkyswap-subgraph
 schema:
@@ -10,7 +10,7 @@ dataSources:
     source:
       address: '0xD6Ab33Ad975b39A8cc981bBc4Aaf61F957A5aD29'
       abi: Factory
-      startBlock: 1677689
+      startBlock: 2025600
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.4
@@ -37,7 +37,7 @@ dataSources:
     source:
       address: '0xE1E1b4582760FcA9664d725412165c7cf04F5F44'
       abi: MasterMilker
-      startBlock: 1944214
+      startBlock: 2025535
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.4
@@ -72,8 +72,6 @@ dataSources:
           handler: add
         - function: set(uint256,uint256)
           handler: set
-        - function: massUpdatePools()
-          handler: massUpdatePools
         - function: updatePool(uint256)
           handler: updatePool
         - function: dev(address)
